@@ -105,7 +105,7 @@ if __name__ == "__main__":
     # Parameters
     NUM_MASKS_PER_IMAGE = 10  # Number of masks to generate per image
     IMAGE_SIZE = (512, 512)  # Resize all images to this size
-    ROOT_DIRS = ["dataset/train", "dataset/val"]  # Directories to process
+    ROOT_DIRS = ["./ancient-greek-pottery-restoration/dataset/train", "./ancient-greek-pottery-restorationdataset/val"]  # Directories to process
 
     # Process each root directory
     for root_dir in ROOT_DIRS:
