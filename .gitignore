@@ -1,0 +1,6 @@
+venv
+*/**/*.jpg
+.DS_Store
+.vscode
+*/**/*.png
+*/**/*.pt
