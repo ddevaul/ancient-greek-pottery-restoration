@@ -11,22 +11,24 @@ import pandas as pd
 
 
 class VaseDataset(Dataset):
-    def __init__(self, root_dir: str, captions_file: str = "captions.csv", transform=None):
+    def __init__(self, dataset_root_dir: str, agg_data_file_name: str = "aggregated_data.csv", transform=None):
         """
-        Vase Dataset for loading masked images, full images, masks, and captions.
-
+        Vase Dataset for loading masked images, original images, masks, and captions.
+        
         Args:
-            root_dir (str): Path to the dataset root directory (e.g., /dataset/train or /dataset/val).
-            captions_file (str): CSV file containing textual captions for images.
-            transform (callable, optional): Transformations to apply to images.
+            dataset_root_dir (str): Path to the root directory of the dataset. 
+                                    This directory should contain the following:
+                                        1. full: Directory containing the original images
+            agg_data_file_name (str): Name of the file containing the aggregated data (Should exist in the dataset_root_dir directory!)
+            transform: Transformations to apply to images.
         """
-        self.root_dir = root_dir
-        self.masked_dir = os.path.join(root_dir, "masked")
-        self.full_dir = os.path.join(root_dir, "full")
-        self.masks_dir = os.path.join(root_dir, "masks")
+        self.dataset_root_dir = dataset_root_dir
+        self.masked_dir = os.path.join(dataset_root_dir, "masked_images")
+        self.original_dir = os.path.join(dataset_root_dir, "original_images")
+        self.masks_dir = os.path.join(dataset_root_dir, "masks")
 
         # Load captions
-        self.captions = pd.read_csv(os.path.join(root_dir, captions_file))
+        self.aggregate_data_df = pd.read_csv(os.path.join(dataset_root_dir, agg_data_file_name))
         self.transform = transform
 
         # List all masked image file names

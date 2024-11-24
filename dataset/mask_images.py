@@ -4,6 +4,7 @@ import numpy as np
 from PIL import Image, ImageDraw
 import torch
 from tqdm import tqdm
+from multiprocessing import Pool, cpu_count
 
 
 def generate_random_mask(size, margin=40, cluster_radius=50):
@@ -48,55 +49,73 @@ def generate_random_mask(size, margin=40, cluster_radius=50):
     return mask_tensor
 
 
+def process_single_image(args):
 
-def process_images(root_dir, num_masks_per_image=10, image_size=(512, 512)):
-    """Process all images in a specified root directory."""
-    full_dir = os.path.join(root_dir, "full")
-    masked_dir = os.path.join(root_dir, "masked")
+    original_images_dir, masked_dir, mask_dir, image_name, num_masks_per_image, image_size = args
+    original_image_path = os.path.join(original_images_dir, image_name)
+    orignal_image = Image.open(original_image_path).convert("RGB")
+    orignal_image = orignal_image.resize(image_size)
+
+    mappings = []
+
+    for i in range(num_masks_per_image):
+        # Generate random mask for this image
+        mask_tensor = generate_random_mask(image_size)
+        
+        # Apply the mask to the image with the color green
+        # green_background = Image.new("RGB", image_size, (0, 255, 0))
+        mask_image = Image.fromarray((mask_tensor.numpy() * 255).astype(np.uint8))
+        # masked_image = Image.composite(green_background, orignal_image, mask_image)
+
+        # # Save the masked image in format: {original_image_name}_masked_{i}.png
+        # masked_image_name = f"{image_name.split('.')[0]}_masked_{i}.png"
+        # masked_image_path = os.path.join(masked_dir, masked_image_name)
+        # masked_image.save(masked_image_path, format="PNG", optimize=True)
+
+       # Save the mask as a black-and-white PNG
+        mask_image_name = f"{image_name.split('.')[0]}_mask_{i}.png"
+        mask_image_path = os.path.join(mask_dir, mask_image_name)
+        mask_image.save(mask_image_path, format="PNG", optimize=True)
+
+        # Record the mapping
+        mappings.append({
+            # "masked_image_name": masked_image_name,
+            "original_image_name": image_name,
+            "mask_png": mask_image_name
+        })
+
+    return mappings
+
+
+def process_images_parallel(root_dir, num_masks_per_image=10, image_size=(512, 512)):
+    original_images_dir = os.path.join(root_dir, "original_images")
+    masked_dir = os.path.join(root_dir, "masked_images")
     mask_dir = os.path.join(root_dir, "masks")
-    output_file = os.path.join(root_dir, "mappings.csv")
+    
+    output_file = os.path.join(root_dir, "mask_mappings.csv")
 
     # Create directories if they don't exist
     os.makedirs(masked_dir, exist_ok=True)
     os.makedirs(mask_dir, exist_ok=True)
 
-    mappings = []
+    image_names = os.listdir(original_images_dir)
+    # Use all available CPUs except 2 so we're not bricked
+    num_cpus = cpu_count() - 2 if cpu_count() > 4 else 1 
+    
+    print(f"Generating masks for {len(image_names)} images using {num_cpus} CPUs...")
 
-    # Iterate through all images in the full directory
-    for image_name in tqdm(os.listdir(full_dir), desc=f"Processing images in {root_dir}"):
-        full_image_path = os.path.join(full_dir, image_name)
+    # Create an argument tuple for each image
+    args_list = [
+        (original_images_dir, masked_dir, mask_dir, image_name, num_masks_per_image, image_size)
+        for image_name in image_names
+    ]
 
-        # Open and resize the full image
-        full_image = Image.open(full_image_path).convert("RGB")
-        full_image = full_image.resize(image_size)
+    # Pass the arguments to the process_single_image function using a cpu pool
+    with Pool(processes=num_cpus) as pool:
+        results = list(tqdm(pool.imap(process_single_image, args_list), total=len(args_list), desc="Processing Images"))
 
-        for i in range(num_masks_per_image):
-            # Generate a random mask tensor
-            mask_tensor = generate_random_mask(image_size)
-
-            # Create a masked image with a green background
-            green_background = Image.new("RGB", image_size, (0, 255, 0))  # Green background
-            mask_image = Image.fromarray((mask_tensor.numpy() * 255).astype(np.uint8))  # Convert tensor to image
-            masked_image = Image.composite(green_background, full_image, mask_image)
-
-            # Save the masked image
-            masked_image_name = f"{image_name.split('.')[0]}_masked_{i}.png"
-            masked_image_path = os.path.join(masked_dir, masked_image_name)
-            masked_image.save(masked_image_path)
-
-            # Save the mask tensor
-            mask_tensor_name = f"{image_name.split('.')[0]}_mask_{i}.pt"
-            mask_tensor_path = os.path.join(mask_dir, mask_tensor_name)
-            torch.save(mask_tensor, mask_tensor_path)
-
-            # Record the mapping
-            mappings.append({
-                "masked_image": masked_image_name,
-                "full_image": image_name,
-                "mask_tensor": mask_tensor_name
-            })
-
-    # Save mappings to CSV
+    # Flatten results and save mappings
+    mappings = [mapping for partial_mapping in results for mapping in partial_mapping]
     pd.DataFrame(mappings).to_csv(output_file, index=False)
     print(f"Saved mappings to {output_file}")
 
@@ -105,8 +124,12 @@ if __name__ == "__main__":
     # Parameters
     NUM_MASKS_PER_IMAGE = 10  # Number of masks to generate per image
     IMAGE_SIZE = (512, 512)  # Resize all images to this size
-    ROOT_DIRS = ["./ancient-greek-pottery-restoration/dataset/train", "./ancient-greek-pottery-restorationdataset/val"]  # Directories to process
-
-    # Process each root directory
-    for root_dir in ROOT_DIRS:
-        process_images(root_dir, num_masks_per_image=NUM_MASKS_PER_IMAGE, image_size=IMAGE_SIZE)
+    
+    if os.path.exists("./ancient-greek-pottery-restoration/dataset/train/original_images"):
+        DATASET_ROOT_DIR = "./ancient-greek-pottery-restoration/dataset/train"
+    elif os.path.exists("./dataset/train/original_images"):
+        DATASET_ROOT_DIR = "./dataset/train"
+    
+    process_images_parallel(DATASET_ROOT_DIR, num_masks_per_image=NUM_MASKS_PER_IMAGE, image_size=IMAGE_SIZE)
+        
+        
