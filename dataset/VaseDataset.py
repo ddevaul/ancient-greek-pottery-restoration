@@ -79,8 +79,8 @@ class VaseDataset(Dataset):
         # Apply the mask to the original image (Make the masked region green)
         original_image_array = np.array(original_image)
         masked_image_array = original_image_array.copy()
-        print(mask_array.shape)
-        print(mask_array)
+        # print(mask_array.shape)
+        # print(mask_array)
         masked_image_array[mask_array == 1] = [
             0,
             255,
