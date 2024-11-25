@@ -8,9 +8,9 @@ import torch
 from tqdm import tqdm
 
 
-def generate_random_mask(size, margin=40, cluster_radius=50):
+def generate_random_mask(size: tuple[int, int], margin: int = 40, cluster_radius: int = 50) -> torch.Tensor:
     """
-    Generate a random binary mask with smaller masked regions grouped closer together.
+    Generate a random binary mask out of a random cluster of rectangles.
 
     Args:
         size (tuple): The size of the image (width, height).
@@ -20,64 +20,72 @@ def generate_random_mask(size, margin=40, cluster_radius=50):
     Returns:
         torch.Tensor: Binary tensor mask (1 for masked regions, 0 for unmasked).
     """
-    mask = Image.new("L", size, 0)  # Black background for the mask
+    width, height = size
+
+    # Make sure that the margin size and cluster radius wont result in invalid mask creation
+    adjusted_margin = min(margin, width // 4, height // 4)  # Max margin is 1/4 of the image size
+    adjusted_cluster_radius = min(cluster_radius, width // 4, height // 4)  # Max cluster radius is 1/4 of the image size
+
+    mask = Image.new("L", size, 0)  # Start with black back background
     draw = ImageDraw.Draw(mask)
 
-    # Randomly pick a center for the cluster
-    cluster_center_x = np.random.randint(margin, size[0] - margin)
-    cluster_center_y = np.random.randint(margin, size[1] - margin)
+    # Randomly pick a center in our allowed region of the image
+    cluster_center_x = np.random.randint(adjusted_margin, width - adjusted_margin)
+    cluster_center_y = np.random.randint(adjusted_margin, height - adjusted_margin)
 
     # Add random rectangles around the cluster center
-    for _ in range(np.random.randint(3, 6)):  # Random number of rectangles
+    for _ in range(np.random.randint(3, 6)):  # add a random number of rectangles
         # Generate rectangle coordinates near the cluster center
         x1 = np.random.randint(
-            max(margin, cluster_center_x - cluster_radius),
-            min(size[0] - margin, cluster_center_x + cluster_radius),
+            max(adjusted_margin, cluster_center_x - adjusted_cluster_radius),
+            min(width - adjusted_margin, cluster_center_x + adjusted_cluster_radius)
         )
         y1 = np.random.randint(
-            max(margin, cluster_center_y - cluster_radius),
-            min(size[1] - margin, cluster_center_y + cluster_radius),
+            max(adjusted_margin, cluster_center_y - adjusted_cluster_radius),
+            min(height - adjusted_margin, cluster_center_y + adjusted_cluster_radius)
         )
-        width = np.random.randint(20, (size[0] - margin) // 3)  # Small random width
-        height = np.random.randint(20, (size[1] - margin) // 3)  # Small random height
-        x2 = min(
-            size[0] - margin, x1 + width
-        )  # Ensure it doesn't go beyond the right edge
-        y2 = min(
-            size[1] - margin, y1 + height
-        )  # Ensure it doesn't go beyond the bottom edge
+
+        # Ensure valid bounds for width and height
+        max_width = max(20, (width - adjusted_margin) // 3)
+        max_height = max(20, (height - adjusted_margin) // 3)
+
+        rect_width = np.random.randint(20, max_width)
+        rect_height = np.random.randint(20, max_height)
+
+        x2 = min(width - adjusted_margin, x1 + rect_width)  # Ensure it doesn't go beyond the right edge
+        y2 = min(height - adjusted_margin, y1 + rect_height)  # Ensure it doesn't go beyond the bottom edge
 
         draw.rectangle([x1, y1, x2, y2], fill=255)
 
-    # Convert to a binary tensor (1 for masked, 0 for unmasked)
+    # Convert to a binary tensor (1 for masked regions, 0 for unmasked)
     mask_tensor = torch.tensor(np.array(mask) > 0, dtype=torch.float32)  # Shape: (H, W)
     return mask_tensor
 
 
+
 @dataclass
 class BatchMaskArgs:
-    original_images_dir: str
     mask_dir: str
     image_names_batch: list[str]
     num_masks_per_image: int
-    image_size: list[int, int]
+    original_images_dir: str  # Add original images directory
 
 
 def mask_batch_of_images(args: BatchMaskArgs):
     # Unpack the args
-    original_images_dir = args.original_images_dir
     mask_dir = args.mask_dir
     image_names_batch = args.image_names_batch
     num_masks_per_image = args.num_masks_per_image
-    image_size = args.image_size
+    original_images_dir = args.original_images_dir
 
     batch_mappings = []
 
     for image_name in image_names_batch:
+        # Get the size of the original image so we know how big to make the mask
         original_image_path = os.path.join(original_images_dir, image_name)
-        orignal_image = Image.open(original_image_path).convert("RGB")
-        orignal_image = orignal_image.resize(image_size)
-
+        original_image = Image.open(original_image_path)
+        image_size = original_image.size  # (width, height)
+        
         for i in range(num_masks_per_image):
             # Generate random mask for this image
             mask_tensor = generate_random_mask(image_size)
@@ -117,11 +125,10 @@ def process_images_parallel(
     # Create list of args for each batch
     batch_mask_args_list = [
         BatchMaskArgs(
-            original_images_dir=original_images_dir,
             mask_dir=mask_dir,
             image_names_batch=batch,
             num_masks_per_image=num_masks_per_image,
-            image_size=image_size,
+            original_images_dir=original_images_dir,
         )
         for batch in image_names_batches
     ]
