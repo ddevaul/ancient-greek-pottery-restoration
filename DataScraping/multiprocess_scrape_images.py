@@ -49,7 +49,7 @@ def get_images(
     image_folder.mkdir(parents=True, exist_ok=True)
     for im in im_file_names:
         im = im.strip()
-        
+
         im_name = Path(im).stem
         file_name = image_folder / f"{im_name}-{technique}.jpg"
         if Path(file_name).exists():
@@ -57,7 +57,7 @@ def get_images(
             continue
         new_url = f"{base_url}/{im}cc001001.jpe"
         try:
-            
+
             # Download the Image
             response = requests.get(new_url, timeout=10)
             response.raise_for_status()  # Raise an exception for errors
@@ -80,7 +80,11 @@ def get_images(
 
 
 def process_batch(
-    batch: list[list[str]], image_folder: Path, output_folder: Path, error_file: Path, batch_id: int
+    batch: list[list[str]],
+    image_folder: Path,
+    output_folder: Path,
+    error_file: Path,
+    batch_id: int,
 ) -> None:
     """
     Process a batch of rows: parse XML and download images.
@@ -122,8 +126,7 @@ def multiprocess_scrape_images(
     num_processes: int = 4,
     batch_size: int = 1000,
 ) -> None:
-    
-    
+
     data_file = Path(data_file)
     image_folder = Path(image_folder)
     output_folder = Path(output_folder)
@@ -148,5 +151,8 @@ def multiprocess_scrape_images(
     with Pool(processes=num_processes) as pool:
         pool.starmap(
             process_batch,
-            [(batch, image_folder, output_folder, error_file, batch_id) for batch_id, batch in enumerate(batches)],
+            [
+                (batch, image_folder, output_folder, error_file, batch_id)
+                for batch_id, batch in enumerate(batches)
+            ],
         )

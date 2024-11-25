@@ -11,28 +11,41 @@ import pandas as pd
 
 
 class VaseDataset(Dataset):
-    def __init__(self, dataset_root_dir: str, agg_data_file_name: str = "aggregated_data.csv", transform=None):
+    def __init__(
+        self,
+        dataset_root_dir: str,
+        agg_data_file_name: str = "aggregated_data.csv",
+        mask_mappings_file_path: str = "aggregated_data.csv",
+        transform=None,
+    ):
         """
         Vase Dataset for loading masked images, original images, masks, and captions.
-        
+
         Args:
-            dataset_root_dir (str): Path to the root directory of the dataset. 
+            dataset_root_dir (str): Path to the root directory of the dataset.
                                     This directory should contain the following:
                                         1. full: Directory containing the original images
             agg_data_file_name (str): Name of the file containing the aggregated data (Should exist in the dataset_root_dir directory!)
             transform: Transformations to apply to images.
         """
         self.dataset_root_dir = dataset_root_dir
-        self.masked_dir = os.path.join(dataset_root_dir, "masked_images")
         self.original_dir = os.path.join(dataset_root_dir, "original_images")
         self.masks_dir = os.path.join(dataset_root_dir, "masks")
 
-        # Load captions
-        self.aggregate_data_df = pd.read_csv(os.path.join(dataset_root_dir, agg_data_file_name))
-        self.transform = transform
+        # Load Captions / Metadata dataframe
+        self.agg_data_file_path = os.path.join(dataset_root_dir, agg_data_file_name)
+        self.aggregate_data_df = pd.read_csv()
 
-        # List all masked image file names
-        self.masked_images = os.listdir(self.masked_dir)
+        # Load mask -> full image mappings dataframe
+        self.mask_mappings_file_path = os.path.join(
+            dataset_root_dir, mask_mappings_file_path
+        )
+
+        self.mask_mappings_df = pd.read_csv(
+            os.path.join(dataset_root_dir, agg_data_file_name)
+        )
+
+        self.transform = transform
 
     def __len__(self):
         return len(self.masked_images)
@@ -55,7 +68,9 @@ class VaseDataset(Dataset):
         full_image = Image.open(full_image_path).convert("RGB")
 
         # Get mask tensor name
-        mask_name = masked_image_name.replace("_masked_", "_mask_").replace(".png", ".pt")
+        mask_name = masked_image_name.replace("_masked_", "_mask_").replace(
+            ".png", ".pt"
+        )
         mask_path = os.path.join(self.masks_dir, mask_name)
         # print(mask_path)
         mask = torch.load(mask_path)  # Load the mask tensor (H, W)
@@ -73,7 +88,7 @@ class VaseDataset(Dataset):
 
         return {
             "masked_images": masked_image,  # RGB image
-            "full_images": full_image,      # RGB image
-            "masks": mask,                  # Binary mask tensor
-            "text": caption,                # Caption (string)
+            "full_images": full_image,  # RGB image
+            "masks": mask,  # Binary mask tensor
+            "text": caption,  # Caption (string)
         }

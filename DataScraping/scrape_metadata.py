@@ -2,6 +2,7 @@ import requests
 import csv
 from xml.etree import ElementTree as ET
 
+
 def scrape_metadata(api_url, output_csv_path):
     try:
         response = requests.get(api_url, timeout=10)
@@ -29,5 +30,3 @@ def scrape_metadata(api_url, output_csv_path):
         print(f"Failed to fetch catalog: {e}")
     except ET.ParseError as e:
         print(f"Error parsing XML: {e}")
-
-
